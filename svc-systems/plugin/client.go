@@ -98,7 +98,7 @@ type CallOption func(*CallConfig)
 // Collector ...
 type Collector interface {
 	Collect(response.RPC) error
-	GetResult(context.Context) response.RPC
+	GetResult() response.RPC
 }
 
 type returnFirst struct {
@@ -111,7 +111,7 @@ func (c *returnFirst) Collect(r response.RPC) error {
 	return nil
 }
 
-func (c *returnFirst) GetResult(ctx context.Context) response.RPC {
+func (c *returnFirst) GetResult() response.RPC {
 	if c.resp == nil {
 		return common.GeneralError(http.StatusNotFound, response.ResourceNotFound, "", []interface{}{"Chassis", c.ReqURI}, nil)
 	}
@@ -150,7 +150,7 @@ func (c *collectCollectionMembers) Collect(r response.RPC) error {
 	return nil
 }
 
-func (c *collectCollectionMembers) GetResult(ctx context.Context) response.RPC {
+func (c *collectCollectionMembers) GetResult() response.RPC {
 	collectionAsBytes, err := JSONMarshalFunc(c.collection)
 	if err != nil {
 		return common.GeneralError(http.StatusInternalServerError, response.InternalError, fmt.Sprintf("Unexpected error: %v", err), nil, nil)
@@ -161,16 +161,16 @@ func (c *collectCollectionMembers) GetResult(ctx context.Context) response.RPC {
 	}
 }
 
-func (m *multiTargetClient) Get(ctx context.Context, uri string, opts ...CallOption) response.RPC {
+func (m *multiTargetClient) Get(uri string, opts ...CallOption) response.RPC {
 	for _, opt := range opts {
 		opt(m.call)
 	}
 	for _, target := range m.targets {
 		client := m.createClient(target)
-		resp := client.Get(ctx, uri)
+		resp := client.Get(uri)
 		err := m.call.collector.Collect(resp)
 		if err != nil {
-			l.LogWithFields(ctx).Warn("execution of GET " + uri + " on " + target.ID + " plugin returned non 2xx status code; " + convertToString(ctx, resp.Body))
+			l.Log.Warn("execution of GET " + uri + " on " + target.ID + " plugin returned non 2xx status code; " + convertToString(resp.Body))
 		}
 	}
 	// Checking whether the struct passed as the interface has a ReqURI field.
@@ -181,7 +181,7 @@ func (m *multiTargetClient) Get(ctx context.Context, uri string, opts ...CallOpt
 		chassisID := getChassisID(uri)
 		field.SetString(chassisID)
 	}
-	return m.call.collector.GetResult(ctx)
+	return m.call.collector.GetResult()
 }
 
 func getChassisID(uri string) string {
@@ -189,18 +189,18 @@ func getChassisID(uri string) string {
 	return parts[len(parts)-1]
 }
 
-func (m *multiTargetClient) Post(ctx context.Context, uri string, body *json.RawMessage) response.RPC {
+func (m *multiTargetClient) Post(uri string, body *json.RawMessage) response.RPC {
 	// TODO: Implement this
 	return response.RPC{
 		StatusCode: http.StatusNotImplemented,
 	}
 }
 
-func (m *multiTargetClient) Patch(ctx context.Context, uri string, body *json.RawMessage) response.RPC {
+func (m *multiTargetClient) Patch(uri string, body *json.RawMessage) response.RPC {
 	for _, target := range m.targets {
 		client := m.createClient(target)
-		l.LogWithFields(ctx).Info("Request received to patch chassis to rack, URI: ", uri)
-		resp := client.Patch(ctx, uri, body)
+		l.Log.Info("Request received to patch chassis to rack, URI: ", uri)
+		resp := client.Patch(uri, body)
 		switch {
 		case resp.StatusCode == http.StatusNotFound:
 			continue
@@ -209,16 +209,16 @@ func (m *multiTargetClient) Patch(ctx context.Context, uri string, body *json.Ra
 		case is4xx(int(resp.StatusCode)):
 			return resp
 		default:
-			l.LogWithFields(ctx).Warn("execution of PATCH " + uri + " on " + target.ID + " plugin returned non 2xx status code; " + convertToString(ctx, resp.Body))
+			l.Log.Warn("execution of PATCH " + uri + " on " + target.ID + " plugin returned non 2xx status code; " + convertToString(resp.Body))
 		}
 	}
 	return common.GeneralError(http.StatusNotFound, response.ResourceNotFound, "", []interface{}{"Chassis", uri}, nil)
 }
 
-func (m *multiTargetClient) Delete(ctx context.Context, uri string) response.RPC {
+func (m *multiTargetClient) Delete(uri string) response.RPC {
 	for _, target := range m.targets {
 		client := m.createClient(target)
-		resp := client.Delete(ctx, uri)
+		resp := client.Delete(uri)
 		switch {
 		case resp.StatusCode == http.StatusNotFound:
 			continue
@@ -227,7 +227,7 @@ func (m *multiTargetClient) Delete(ctx context.Context, uri string) response.RPC
 		case is4xx(int(resp.StatusCode)):
 			return resp
 		default:
-			l.LogWithFields(ctx).Warn("execution of DELETE " + uri + " on " + target.ID + " plugin returned non 2xx status code; " + convertToString(ctx, resp.Body))
+			l.Log.Warn("execution of DELETE " + uri + " on " + target.ID + " plugin returned non 2xx status code; " + convertToString(resp.Body))
 		}
 	}
 	return common.GeneralError(http.StatusNotFound, response.ResourceNotFound, "", []interface{}{"Chassis", uri}, nil)
@@ -235,10 +235,10 @@ func (m *multiTargetClient) Delete(ctx context.Context, uri string) response.RPC
 
 // Client ...
 type Client interface {
-	Get(ctx context.Context, uri string, opts ...CallOption) response.RPC
-	Post(ctx context.Context, uri string, body *json.RawMessage) response.RPC
-	Patch(ctx context.Context, uri string, body *json.RawMessage) response.RPC
-	Delete(ctx context.Context, uri string) response.RPC
+	Get(uri string, opts ...CallOption) response.RPC
+	Post(uri string, body *json.RawMessage) response.RPC
+	Patch(uri string, body *json.RawMessage) response.RPC
+	Delete(uri string) response.RPC
 }
 
 type client struct {
@@ -246,53 +246,49 @@ type client struct {
 	plugin     smodel.Plugin
 }
 
-func (c *client) Delete(ctx context.Context, uri string) response.RPC {
-	l.LogWithFields(ctx).Debugf("incoming Delete request with: %s", uri)
+func (c *client) Delete(uri string) response.RPC {
 	url := fmt.Sprintf("https://%s:%s%s", c.plugin.IP, c.plugin.Port, uri)
 	url = c.translator.toSouthbound(url)
-	resp, err := pmbhandle.ContactPlugin(ctx, url, http.MethodDelete, "", "", nil, map[string]string{
+	resp, err := pmbhandle.ContactPlugin(context.TODO(), url, http.MethodDelete, "", "", nil, map[string]string{
 		"UserName": c.plugin.Username,
 		"Password": string(c.plugin.Password),
 	})
-	return c.extractResp(ctx, resp, err)
+	return c.extractResp(resp, err)
 }
 
-func (c *client) Post(ctx context.Context, uri string, body *json.RawMessage) response.RPC {
-	l.LogWithFields(ctx).Debugf("incoming Post request with %s", uri)
-	url := fmt.Sprintf("https://%s:%s%s", c.plugin.IP, c.plugin.Port, uri)
-	url = c.translator.toSouthbound(url)
-	*body = json.RawMessage(c.translator.toSouthbound(string(*body)))
-	resp, err := pmbhandle.ContactPlugin(ctx, url, http.MethodPost, "", "", body, map[string]string{
-		"UserName": c.plugin.Username,
-		"Password": string(c.plugin.Password),
-	})
-	return c.extractResp(ctx, resp, err)
-}
-
-func (c *client) Patch(ctx context.Context, uri string, body *json.RawMessage) response.RPC {
-	l.LogWithFields(ctx).Debugf("incoming Patch request with %s", uri)
+func (c *client) Post(uri string, body *json.RawMessage) response.RPC {
 	url := fmt.Sprintf("https://%s:%s%s", c.plugin.IP, c.plugin.Port, uri)
 	url = c.translator.toSouthbound(url)
 	*body = json.RawMessage(c.translator.toSouthbound(string(*body)))
-	resp, err := pmbhandle.ContactPlugin(ctx, url, http.MethodPatch, "", "", body, map[string]string{
+	resp, err := pmbhandle.ContactPlugin(context.TODO(), url, http.MethodPost, "", "", body, map[string]string{
 		"UserName": c.plugin.Username,
 		"Password": string(c.plugin.Password),
 	})
-	return c.extractResp(ctx, resp, err)
+	return c.extractResp(resp, err)
 }
 
-func (c *client) Get(ctx context.Context, uri string, _ ...CallOption) response.RPC {
-	l.LogWithFields(ctx).Debugf("incoming Get request with %s", uri)
+func (c *client) Patch(uri string, body *json.RawMessage) response.RPC {
 	url := fmt.Sprintf("https://%s:%s%s", c.plugin.IP, c.plugin.Port, uri)
 	url = c.translator.toSouthbound(url)
-	resp, err := pmbhandle.ContactPlugin(ctx, url, http.MethodGet, "", "", nil, map[string]string{
+	*body = json.RawMessage(c.translator.toSouthbound(string(*body)))
+	resp, err := pmbhandle.ContactPlugin(context.TODO(), url, http.MethodPatch, "", "", body, map[string]string{
 		"UserName": c.plugin.Username,
 		"Password": string(c.plugin.Password),
 	})
-	return c.extractResp(ctx, resp, err)
+	return c.extractResp(resp, err)
 }
 
-func (c *client) extractResp(ctx context.Context, httpResponse *http.Response, err error) response.RPC {
+func (c *client) Get(uri string, _ ...CallOption) response.RPC {
+	url := fmt.Sprintf("https://%s:%s%s", c.plugin.IP, c.plugin.Port, uri)
+	url = c.translator.toSouthbound(url)
+	resp, err := pmbhandle.ContactPlugin(context.TODO(), url, http.MethodGet, "", "", nil, map[string]string{
+		"UserName": c.plugin.Username,
+		"Password": string(c.plugin.Password),
+	})
+	return c.extractResp(resp, err)
+}
+
+func (c *client) extractResp(httpResponse *http.Response, err error) response.RPC {
 	if err != nil {
 		return common.GeneralError(http.StatusInternalServerError, response.InternalError, err.Error(), nil, nil)
 	}
@@ -308,7 +304,7 @@ func (c *client) extractResp(ctx context.Context, httpResponse *http.Response, e
 		ce := new(response.CommonError)
 		err := dec.Decode(ce)
 		if err != nil {
-			l.LogWithFields(ctx).Error("Cannot decode CommonError: " + err.Error())
+			l.Log.Error("Cannot decode CommonError: " + err.Error())
 			return common.GeneralError(http.StatusInternalServerError, response.InternalError, string(body), nil, nil)
 		}
 	}
@@ -394,10 +390,10 @@ func findAllPlugins(key string) (res []*smodel.Plugin, err error) {
 	return
 }
 
-func convertToString(ctx context.Context, data interface{}) string {
+func convertToString(data interface{}) string {
 	byteData, err := JSONMarshalFunc(data)
 	if err != nil {
-		l.LogWithFields(ctx).Error("converting interface to string type failed: " + err.Error())
+		l.Log.Error("converting interface to string type failed: " + err.Error())
 		return ""
 	}
 

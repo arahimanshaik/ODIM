@@ -17,7 +17,6 @@
 package chassis
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -39,7 +38,7 @@ var (
 )
 
 // Handle defines the operations which handle the RPC request-response for deleting a chassis
-func (d *Delete) Handle(ctx context.Context, req *chassisproto.DeleteChassisRequest) response.RPC {
+func (d *Delete) Handle(req *chassisproto.DeleteChassisRequest) response.RPC {
 	e := d.findInMemory("Chassis", req.URL, new(json.RawMessage))
 	if e == nil {
 		return common.GeneralError(http.StatusMethodNotAllowed, response.ActionNotSupported, "Managed Chassis cannot be deleted", []interface{}{"DELETE"}, nil)
@@ -61,16 +60,16 @@ func (d *Delete) Handle(ctx context.Context, req *chassisproto.DeleteChassisRequ
 	plugins, err := FindAllPluginsFunc("URP*")
 	if err != nil {
 		errorMessage := "error while getting plugin details: " + err.Error()
-		l.LogWithFields(ctx).Error(errorMessage)
+		l.Log.Error(errorMessage)
 		return common.GeneralError(http.StatusInternalServerError, response.InternalError, errorMessage,
 			nil, nil)
 	}
 	managerURI := "/redfish/v1/Managers/" + plugins[0].ManagerUUID
 
-	data, jerr := GetResourceFunc(ctx, "Managers", managerURI)
+	data, jerr := GetResourceFunc("Managers", managerURI)
 	if jerr != nil {
 		errorMessage := "error while getting manager details: " + jerr.Error()
-		l.LogWithFields(ctx).Error(errorMessage)
+		l.Log.Error(errorMessage)
 		return common.GeneralError(http.StatusInternalServerError, response.InternalError, errorMessage,
 			nil, nil)
 	}
@@ -78,7 +77,7 @@ func (d *Delete) Handle(ctx context.Context, req *chassisproto.DeleteChassisRequ
 	err = JSONUnmarshalFunc([]byte(data), &managerData)
 	if err != nil {
 		errorMessage := "error unmarshalling manager details: " + err.Error()
-		l.LogWithFields(ctx).Error(errorMessage)
+		l.Log.Error(errorMessage)
 		return common.GeneralError(http.StatusInternalServerError, response.InternalError, errorMessage,
 			nil, nil)
 	}
@@ -102,18 +101,18 @@ func (d *Delete) Handle(ctx context.Context, req *chassisproto.DeleteChassisRequ
 	detail, marshalErr := JSONMarshalFunc(managerData)
 	if marshalErr != nil {
 		errorMessage := "unable to marshal data for updating: " + marshalErr.Error()
-		l.LogWithFields(ctx).Error(errorMessage)
+		l.Log.Error(errorMessage)
 		return common.GeneralError(http.StatusInternalServerError, response.InternalError, errorMessage, nil, nil)
 	}
 
-	genericErr := GenericSaveFunc(ctx, []byte(detail), "Managers", managerURI)
+	genericErr := GenericSaveFunc([]byte(detail), "Managers", managerURI)
 	if genericErr != nil {
 		errorMessage := "GenericSave : error while trying to add resource date to DB: " + genericErr.Error()
-		l.LogWithFields(ctx).Error(errorMessage)
+		l.Log.Error(errorMessage)
 		return common.GeneralError(http.StatusInternalServerError, response.InternalError, errorMessage, nil, nil)
 	}
-	l.LogWithFields(ctx).Debugf("Deleting URI: %s", string(req.URL))
-	return c.Delete(ctx, req.URL)
+
+	return c.Delete(req.URL)
 }
 
 // NewDeleteHandler returns an instance of Delete struct

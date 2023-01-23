@@ -53,17 +53,17 @@ var (
 	GetStringFunc = smodel.GetString
 )
 
-func setRegexFlag(ctx context.Context, val string) bool {
+func setRegexFlag(val string) bool {
 	var re = regexp.MustCompile(`(?m)[\[\]!@#$%^&*(),.?":{}|<>]`)
 
 	for i, match := range re.FindAllString(val, -1) {
-		l.LogWithFields(ctx).Info("Matched entry no.: " + string(rune(i)) + " match=" + match)
+		l.Log.Info("Matched entry no.: " + string(rune(i)) + " match=" + match)
 		return true
 	}
 	return false
 }
 
-func errorResp(ctx context.Context, each string, resp response.RPC) (response.RPC, error) {
+func errorResp(each string, resp response.RPC) (response.RPC, error) {
 	if each == "" {
 		errorMessage := " not a valid search/filter expression"
 		return common.GeneralError(http.StatusBadRequest, response.QueryCombinationInvalid, errorMessage, []interface{}{"ComputerSystem", ""}, nil), fmt.Errorf(errorMessage)
@@ -71,31 +71,31 @@ func errorResp(ctx context.Context, each string, resp response.RPC) (response.RP
 	return resp, nil
 }
 
-func ifMatches(ctx context.Context, strPara string, operator string, resp response.RPC) (response.RPC, error) {
+func ifMatches(strPara string, operator string, resp response.RPC) (response.RPC, error) {
 	strSplit := strings.Split(strPara, operator)
 	for _, e := range strSplit {
 
-		resp, err := errorResp(ctx, e, resp)
+		resp, err := errorResp(e, resp)
 		if err != nil {
-			l.LogWithFields(ctx).Error(err.Error())
+			l.Log.Error(err.Error())
 			return resp, err
 		}
 	}
 	return resp, nil
 }
 
-func validate(ctx context.Context, strPara string, resp response.RPC) (response.RPC, error) {
+func validate(strPara string, resp response.RPC) (response.RPC, error) {
 	if strings.Contains(strPara, "and") {
-		resp, err := ifMatches(ctx, strPara, "and", resp)
+		resp, err := ifMatches(strPara, "and", resp)
 		if err != nil {
-			l.LogWithFields(ctx).Error(err.Error())
+			l.Log.Error(err.Error())
 			return resp, err
 		}
 	}
 	if strings.Contains(strPara, "or") {
-		resp, err := ifMatches(ctx, strPara, "or", resp)
+		resp, err := ifMatches(strPara, "or", resp)
 		if err != nil {
-			l.LogWithFields(ctx).Error(err.Error())
+			l.Log.Error(err.Error())
 			return resp, err
 		}
 	}
@@ -126,8 +126,7 @@ func validateLastParameter(expression []string) error {
 }
 
 // GetMembers will fetch the resource members based on the filter expression
-func GetMembers(ctx context.Context, allowed map[string]map[string]bool, expression []string, resp response.RPC) ([]dmtf.Link, response.RPC, error) {
-	l.LogWithFields(ctx).Debugf("incoming GetMembers request for expression: %v", expression)
+func GetMembers(allowed map[string]map[string]bool, expression []string, resp response.RPC) ([]dmtf.Link, response.RPC, error) {
 	err := validateLastParameter(expression)
 	if err != nil {
 		return nil, common.GeneralError(http.StatusBadRequest, response.QueryNotSupported, err.Error(), nil, nil), err
@@ -165,7 +164,7 @@ func GetMembers(ctx context.Context, allowed map[string]map[string]bool, express
 				var val, regex string
 				if allowed["conditionKeys"][expression[new]] {
 					val = expression[new+1]
-					regexFlag = setRegexFlag(ctx, val)
+					regexFlag = setRegexFlag(val)
 					key = strings.Replace(pam, "\\/", "/", -1)
 					if regexFlag {
 						regex = val
@@ -191,7 +190,7 @@ func GetMembers(ctx context.Context, allowed map[string]map[string]bool, express
 							}
 						}
 						// parse the data with the regex
-						parsedList, err := parseRegexData(ctx, list, regex)
+						parsedList, err := parseRegexData(list, regex)
 						if err != nil {
 							errorMessage := " not a valid search/filter expression"
 							return nil, common.GeneralError(http.StatusBadRequest, response.QueryCombinationInvalid, errorMessage, []interface{}{"ComputerSystem", ""}, nil), fmt.Errorf(errorMessage)
@@ -249,17 +248,15 @@ func GetMembers(ctx context.Context, allowed map[string]map[string]bool, express
 
 		}
 	}
-	l.LogWithFields(ctx).Debugf("outgoing response for GetMembers members: %v, statuscode: %d", members, resp.StatusCode)
 	return members, resp, nil
 }
 
 // getAllSystemIDs will fetch all the document ID's present in the DB
-func getAllSystemIDs(ctx context.Context, resp response.RPC) ([]dmtf.Link, response.RPC, error) {
-	l.LogWithFields(ctx).Debugln("incoming getAllSystemIDs request ")
+func getAllSystemIDs(resp response.RPC) ([]dmtf.Link, response.RPC, error) {
 	var mems []dmtf.Link
 	systemKeys, err := GetAllKeysFromTableFunc("ComputerSystem")
 	if err != nil {
-		l.LogWithFields(ctx).Error("error getting all keys of systemcollection table : " + err.Error())
+		l.Log.Error("error getting all keys of systemcollection table : " + err.Error())
 		errorMessage := err.Error()
 		if errorMessage == "error while trying to get resource details: no data with the with table name SystemCollection found" {
 			return nil, common.GeneralError(http.StatusNotFound, response.ResourceNotFound, errorMessage, []interface{}{"ComputerSystem", ""}, nil), err
@@ -269,7 +266,7 @@ func getAllSystemIDs(ctx context.Context, resp response.RPC) ([]dmtf.Link, respo
 	for _, key := range systemKeys {
 		mems = append(mems, dmtf.Link{Oid: key})
 	}
-	l.LogWithFields(ctx).Debugf("outgoing response for getAllSystemIDs members: %v, statuscode: %d", mems, resp.StatusCode)
+
 	return mems, resp, nil
 
 }
@@ -313,7 +310,7 @@ func LogicalOperation(interm [][]dmtf.Link, lo string) []dmtf.Link {
 }
 
 // SearchAndFilter take the url as input and return the search result based on the filter expression
-func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) (response.RPC, error) {
+func SearchAndFilter(paramStr []string, resp response.RPC) (response.RPC, error) {
 	allowed := make(map[string]map[string]bool)
 	allowed["queryKeys"] = make(map[string]bool)
 	allowed["logicalOperators"] = make(map[string]bool)
@@ -371,7 +368,7 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 					x = strings.Split(element, " or ")
 				}
 				for _, each := range x {
-					sa, resp, err = GetMembers(ctx, allowed, strings.Split(each, " "), resp)
+					sa, resp, err = GetMembers(allowed, strings.Split(each, " "), resp)
 					if err != nil {
 						return resp, err
 					}
@@ -383,7 +380,7 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 					strPara = strings.Replace(strPara, each, string(s), -1)
 				}
 			} else {
-				sa, resp, err = GetMembers(ctx, allowed, strings.Split(element, " "), resp)
+				sa, resp, err = GetMembers(allowed, strings.Split(element, " "), resp)
 				if err != nil {
 					return resp, err
 				}
@@ -426,16 +423,16 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 		if strings.Contains(strPara, "and ") || strings.Contains(strPara, " and") || strings.Contains(strPara, "or ") || strings.Contains(strPara, " or") {
 			var ww []dmtf.Link
 			var inter [][]dmtf.Link
-			resp, err = validate(ctx, strPara, resp)
+			resp, err = validate(strPara, resp)
 			if err != nil {
-				l.LogWithFields(ctx).Error(err.Error())
+				l.Log.Error(err.Error())
 				return resp, err
 			}
 			if strings.Contains(strPara, " and ") {
 				for _, e := range strings.Split(strPara, " and ") {
-					resp, err = errorResp(ctx, e, resp)
+					resp, err = errorResp(e, resp)
 					if err != nil {
-						l.LogWithFields(ctx).Error(err.Error())
+						l.Log.Error(err.Error())
 						return resp, err
 					}
 					_ = json.Unmarshal([]byte(e), &ww)
@@ -445,9 +442,9 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 			}
 			if strings.Contains(strPara, " or ") {
 				for _, e := range strings.Split(strPara, " or ") {
-					resp, err = errorResp(ctx, e, resp)
+					resp, err = errorResp(e, resp)
 					if err != nil {
-						l.LogWithFields(ctx).Error(err.Error())
+						l.Log.Error(err.Error())
 						return resp, err
 					}
 					_ = json.Unmarshal([]byte(e), &ww)
@@ -472,19 +469,19 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 	} else if strings.Contains(strPara, "and ") || strings.Contains(strPara, " and") || strings.Contains(strPara, "or ") || strings.Contains(strPara, " or") {
 		var ww []dmtf.Link
 		var inter [][]dmtf.Link
-		resp, err = validate(ctx, strPara, resp)
+		resp, err = validate(strPara, resp)
 		if err != nil {
-			l.LogWithFields(ctx).Error(err.Error())
+			l.Log.Error(err.Error())
 			return resp, err
 		}
 		if strings.Contains(strPara, " and ") {
 			for _, each := range strings.Split(strPara, " and ") {
-				resp, err = errorResp(ctx, each, resp)
+				resp, err = errorResp(each, resp)
 				if err != nil {
-					l.LogWithFields(ctx).Error(err.Error())
+					l.Log.Error(err.Error())
 					return resp, err
 				}
-				ww, resp, err = GetMembers(ctx, allowed, strings.Split(each, " "), resp)
+				ww, resp, err = GetMembers(allowed, strings.Split(each, " "), resp)
 				if err != nil {
 					return resp, err
 				}
@@ -494,12 +491,12 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 		}
 		if strings.Contains(strPara, " or ") {
 			for _, each := range strings.Split(strPara, " or ") {
-				resp, err = errorResp(ctx, each, resp)
+				resp, err = errorResp(each, resp)
 				if err != nil {
-					l.LogWithFields(ctx).Error(err.Error())
+					l.Log.Error(err.Error())
 					return resp, err
 				}
-				ww, resp, err = GetMembers(ctx, allowed, strings.Split(each, " "), resp)
+				ww, resp, err = GetMembers(allowed, strings.Split(each, " "), resp)
 				if err != nil {
 					return resp, err
 				}
@@ -510,12 +507,12 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 		}
 	} else if strings.Contains(strPara, " not ") || strings.Contains(strPara, "not ") {
 		var all, exp []dmtf.Link
-		all, resp, err = getAllSystemIDs(ctx, resp)
+		all, resp, err = getAllSystemIDs(resp)
 		if err != nil {
 			return resp, err
 		}
 		expression := strings.Split(strPara, "not ")
-		exp, resp, err = GetMembers(ctx, allowed, strings.Split(expression[1], " "), resp)
+		exp, resp, err = GetMembers(allowed, strings.Split(expression[1], " "), resp)
 		if err != nil {
 			return resp, err
 		}
@@ -528,7 +525,7 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 		}
 		respMembers = all
 	} else {
-		respMembers, resp, err = GetMembers(ctx, allowed, strings.Split(strPara, " "), resp)
+		respMembers, resp, err = GetMembers(allowed, strings.Split(strPara, " "), resp)
 		if err != nil {
 			return resp, err
 		}
@@ -557,7 +554,7 @@ func SearchAndFilter(ctx context.Context, paramStr []string, resp response.RPC) 
 // Url will be parsed from that search key will created
 // There will be two return values for the fuction. One is the RPC response, which contains the
 // status code, status message, headers and body and the second value is error.
-func (p *PluginContact) GetSystemResource(ctx context.Context, req *systemsproto.GetSystemsRequest) response.RPC {
+func (p *PluginContact) GetSystemResource(req *systemsproto.GetSystemsRequest) response.RPC {
 	var resp response.RPC
 	// Splitting the SystemID to get UUID
 	requestData := strings.SplitN(req.RequestParam, ".", 2)
@@ -570,11 +567,11 @@ func (p *PluginContact) GetSystemResource(ctx context.Context, req *systemsproto
 	var respData string
 	var saveRequired bool
 	// Getting the reset flag details for the requested URL
-	deviceLoadFlag := GetDeviceLoadInfoFunc(ctx, req.URL, req.RequestParam)
+	deviceLoadFlag := GetDeviceLoadInfoFunc(req.URL, req.RequestParam)
 	// deviceLoadFlag is true means flag is set for requested URL or the SystemID URL, load from device
 	// deviceLoadFlag is false indicates flag is not set, load from DB
 	if deviceLoadFlag {
-		l.LogWithFields(ctx).Debug("SystemReset flag is found for the URL ", req.URL)
+		l.Log.Debug("SystemReset flag is found for the URL ", req.URL)
 		var getDeviceInfoRequest = scommon.ResourceInfoRequest{
 			URL:             req.URL,
 			UUID:            uuid,
@@ -583,9 +580,9 @@ func (p *PluginContact) GetSystemResource(ctx context.Context, req *systemsproto
 			DevicePassword:  p.DevicePassword,
 			GetPluginStatus: p.GetPluginStatus,
 		}
-		l.LogWithFields(ctx).Debug("Getting resource data from device for URL ", req.URL)
+		l.Log.Debug("Getting resource data from device for URL ", req.URL)
 		var err error
-		if respData, err = scommon.GetResourceInfoFromDevice(ctx, getDeviceInfoRequest, saveRequired); err != nil {
+		if respData, err = scommon.GetResourceInfoFromDevice(getDeviceInfoRequest, saveRequired); err != nil {
 			return common.GeneralError(http.StatusNotFound, response.ResourceNotFound, err.Error(), []interface{}{"ComputerSystem", req.URL}, nil)
 		}
 	} else {
@@ -600,10 +597,10 @@ func (p *PluginContact) GetSystemResource(ctx context.Context, req *systemsproto
 			tableName = urlData[len(urlData)-2]
 		}
 
-		l.LogWithFields(ctx).Debug("Getting the details from DB for URL ", req.URL)
-		data, err := smodel.GetResource(ctx, tableName, req.URL)
+		l.Log.Debug("Getting the details from DB for URL ", req.URL)
+		data, err := smodel.GetResource(tableName, req.URL)
 		if err != nil {
-			l.LogWithFields(ctx).Error("getting system details from DB: " + err.Error())
+			l.Log.Error("getting system details from DB: " + err.Error())
 			errorMessage := err.Error()
 			if errors.DBKeyNotFound == err.ErrNo() {
 				var getDeviceInfoRequest = scommon.ResourceInfoRequest{
@@ -615,12 +612,12 @@ func (p *PluginContact) GetSystemResource(ctx context.Context, req *systemsproto
 					GetPluginStatus: p.GetPluginStatus,
 				}
 				var err error
-				l.LogWithFields(ctx).Debug("Getting the details from device for URL ", req.URL)
-				if data, err = scommon.GetResourceInfoFromDevice(ctx, getDeviceInfoRequest, saveRequired); err != nil {
+				l.Log.Debug("Getting the details from device for URL ", req.URL)
+				if data, err = scommon.GetResourceInfoFromDevice(getDeviceInfoRequest, saveRequired); err != nil {
 					return common.GeneralError(http.StatusNotFound, response.ResourceNotFound, err.Error(), []interface{}{"ComputerSystem", req.URL}, nil)
 				}
 				if saveRequired && strings.Contains(req.URL, "/Storage") {
-					rediscoverStorageInventory(ctx, uuid, "/redfish/v1/Systems/"+requestData[1]+"/Storage")
+					rediscoverStorageInventory(uuid, "/redfish/v1/Systems/"+requestData[1]+"/Storage")
 				}
 			} else {
 				return common.GeneralError(http.StatusInternalServerError, response.InternalError, errorMessage, nil, nil)
@@ -641,13 +638,14 @@ func (p *PluginContact) GetSystemResource(ctx context.Context, req *systemsproto
 		resp.Body = result
 		resp.StatusCode = http.StatusOK
 		resp.StatusMessage = response.Success
-		l.LogWithFields(ctx).Debug("Exiting the GetSystemResource with response ", resp)
+		l.Log.Debug("Exiting the GetSystemResource with response ", resp)
 		return resp
 
 	}
 	resp.Body = resource
 	resp.StatusCode = http.StatusOK
 	resp.StatusMessage = response.Success
+	l.Log.Debug("Exiting the GetSystemResource with response ", resp)
 	return resp
 
 }
@@ -674,12 +672,12 @@ func fillCapabilitiesResponse(respMap map[string]interface{}, oid string) (body 
 // returns true if exact URL entry is found in the DeviceLoad
 // returns true if System ID entry is found in the DeviceLoad
 // returns false if no entry is found in the DeviceLoad for the requested URL and System ID
-func getDeviceLoadInfo(ctx context.Context, URL, systemID string) bool {
+func getDeviceLoadInfo(URL, systemID string) bool {
 	systemURL := "/redfish/v1/Systems/" + systemID
 	var resetFlag bool
-	if _, err := GetSystemResetInfoFunc(ctx, URL); err == nil {
+	if _, err := GetSystemResetInfoFunc(URL); err == nil {
 		resetFlag = true
-	} else if _, err := smodel.GetSystemResetInfo(ctx, systemURL); err == nil {
+	} else if _, err := smodel.GetSystemResetInfo(systemURL); err == nil {
 		resetFlag = true
 	}
 	if resetFlag {
@@ -696,26 +694,26 @@ func getDeviceLoadInfo(ctx context.Context, URL, systemID string) bool {
 // rediscoverSystemInventory will be triggered when ever the a valid storage URI or underneath URI's
 // are requested which does not exist in DB. It will create a rpc for aggregation which will delete all storage inventory //
 // and rediscover all of them
-func rediscoverStorageInventory(ctx context.Context, systemID, systemURL string) {
+func rediscoverStorageInventory(systemID, systemURL string) {
 	systemURL = strings.TrimSuffix(systemURL, "/")
 
 	conn, err := services.ODIMService.Client(services.Aggregator)
 	if err != nil {
-		l.LogWithFields(ctx).Error("failed to get client connection object for aggregator service")
+		l.Log.Error("failed to get client connection object for aggregator service")
 		return
 	}
 	defer conn.Close()
 	aggregator := aggregatorproto.NewAggregatorClient(conn)
 
-	_, err = aggregator.RediscoverSystemInventory(ctx, &aggregatorproto.RediscoverSystemInventoryRequest{
+	_, err = aggregator.RediscoverSystemInventory(context.TODO(), &aggregatorproto.RediscoverSystemInventoryRequest{
 		SystemID:  systemID,
 		SystemURL: systemURL,
 	})
 	if err != nil {
-		l.LogWithFields(ctx).Error("Error while rediscoverStorageInventroy")
+		l.Log.Error("Error while rediscoverStorageInventroy")
 		return
 	}
-	l.LogWithFields(ctx).Info("rediscovery of system storage started.")
+	l.Log.Info("rediscovery of system storage started.")
 	return
 }
 
@@ -741,7 +739,7 @@ func GetSystemsCollection(ctx context.Context, req *systemsproto.GetSystemsReque
 	var resp response.RPC
 	paramStr := strings.SplitN(req.URL, "?", 2)
 	if len(paramStr) > 1 {
-		resp, retError := SearchAndFilter(ctx, paramStr, resp)
+		resp, retError := SearchAndFilter(paramStr, resp)
 		if retError != nil {
 			return resp
 		}
@@ -785,7 +783,7 @@ func GetSystemsCollection(ctx context.Context, req *systemsproto.GetSystemsReque
 // Url will be parsed from that search key will created
 // There will be two return values for the function. One is the RPC response, which contains the
 // status code, status message, headers and body and the second value is error.
-func (p *PluginContact) GetSystems(ctx context.Context, req *systemsproto.GetSystemsRequest) response.RPC {
+func (p *PluginContact) GetSystems(req *systemsproto.GetSystemsRequest) response.RPC {
 	var resp response.RPC
 	requestData := strings.SplitN(req.RequestParam, ".", 2)
 	if len(requestData) <= 1 {
@@ -804,7 +802,7 @@ func (p *PluginContact) GetSystems(ctx context.Context, req *systemsproto.GetSys
 		GetPluginStatus: p.GetPluginStatus,
 		ResourceName:    "ComputerSystem",
 	}
-	data, err := GetResourceInfoFromDeviceFunc(ctx, getDeviceInfoRequest, true)
+	data, err := GetResourceInfoFromDeviceFunc(getDeviceInfoRequest, true)
 	if err != nil {
 		return common.GeneralError(http.StatusNotFound, response.ResourceNotFound, err.Error(), []interface{}{"ComputerSystem", req.RequestParam}, nil)
 	}
@@ -885,7 +883,7 @@ func getRangeData(key, expr string, match int, regexFlag bool) ([]string, error)
 	return []string{}, nil
 }
 
-func parseRegexData(ctx context.Context, data []string, regex string) ([]string, error) {
+func parseRegexData(data []string, regex string) ([]string, error) {
 	regex = strings.Replace(regex, "(", "\\(", -1)
 	regex = strings.Replace(regex, ")", "\\)", -1)
 	regex = "(?i)" + regex
@@ -894,7 +892,7 @@ func parseRegexData(ctx context.Context, data []string, regex string) ([]string,
 		values := strings.Split(data[i], "::")
 		found, err := regexp.MatchString(regex, values[0])
 		if err != nil {
-			l.LogWithFields(ctx).Error("regular expression error: " + err.Error())
+			l.Log.Error("regular expression error: " + err.Error())
 			return list, err
 		}
 		if found {

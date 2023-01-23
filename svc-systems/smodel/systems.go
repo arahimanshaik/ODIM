@@ -13,11 +13,10 @@
 //License for the specific language governing permissions and limitations
 // under the License.
 
-// Package smodel ....
+//Package smodel ....
 package smodel
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -30,7 +29,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
-// Target is for sending the requst to south bound/plugin
+//Target is for sending the requst to south bound/plugin
 type Target struct {
 	ManagerAddress string `json:"ManagerAddress"`
 	Password       []byte `json:"Password"`
@@ -83,9 +82,8 @@ type OdataIDLink struct {
 	OdataID string `json:"@odata.id"`
 }
 
-// GetSystemByUUID fetches computer system details by UUID from database
-func GetSystemByUUID(ctx context.Context, systemUUID string) (string, *errors.Error) {
-	l.LogWithFields(ctx).Debugf("incoming GetSystemByUUID request with systemUUID: %s", systemUUID)
+//GetSystemByUUID fetches computer system details by UUID from database
+func GetSystemByUUID(systemUUID string) (string, *errors.Error) {
 	var system string
 	conn, err := GetDBConnectionFunc(common.InMemory)
 	if err != nil {
@@ -99,13 +97,11 @@ func GetSystemByUUID(ctx context.Context, systemUUID string) (string, *errors.Er
 	if errs := JSONUnmarshalFunc([]byte(systemData), &system); errs != nil {
 		return "", errors.PackError(errors.UndefinedErrorType, errs)
 	}
-	l.LogWithFields(ctx).Debugf("Outgoing response for GetSystemByUUID systemUUID: %s, is system: %s", systemUUID, system)
 	return system, nil
 }
 
-// GetResource fetches a resource from database using table and key
-func GetResource(ctx context.Context, Table, key string) (string, *errors.Error) {
-	l.LogWithFields(ctx).Debugf("incoming GetResource request with Table: %s, key: %s", Table, key)
+//GetResource fetches a resource from database using table and key
+func GetResource(Table, key string) (string, *errors.Error) {
 	conn, err := GetDBConnectionFunc(common.InMemory)
 	if err != nil {
 		return "", err
@@ -196,7 +192,7 @@ func scan(cp *persistencemgr.ConnPool, key string) ([]interface{}, error) {
 	return results, nil
 }
 
-// GetAllKeysFromTable fetches all keys in a given table
+//GetAllKeysFromTable fetches all keys in a given table
 func GetAllKeysFromTable(table string) ([]string, error) {
 	conn, err := GetDBConnectionFunc(common.InMemory)
 	if err != nil {
@@ -209,7 +205,7 @@ func GetAllKeysFromTable(table string) ([]string, error) {
 	return keysArray, nil
 }
 
-// GetPluginData will fetch plugin details
+//GetPluginData will fetch plugin details
 func GetPluginData(pluginID string) (Plugin, *errors.Error) {
 	var plugin Plugin
 
@@ -236,7 +232,7 @@ func GetPluginData(pluginID string) (Plugin, *errors.Error) {
 	return plugin, nil
 }
 
-// GetTarget fetches the System(Target Device Credentials) table details
+//GetTarget fetches the System(Target Device Credentials) table details
 func GetTarget(deviceUUID string) (*Target, *errors.Error) {
 	var target Target
 	conn, err := GetDBConnectionFunc(common.OnDisk)
@@ -253,8 +249,8 @@ func GetTarget(deviceUUID string) (*Target, *errors.Error) {
 	return &target, nil
 }
 
-// GenericSave will save any resource data into the database
-func GenericSave(ctx context.Context, body []byte, table string, key string) error {
+//GenericSave will save any resource data into the database
+func GenericSave(body []byte, table string, key string) error {
 	connPool, err := GetDBConnectionFunc(common.InMemory)
 	if err != nil {
 		return fmt.Errorf("error while trying to connecting to DB: %v", err.Error())
@@ -263,7 +259,7 @@ func GenericSave(ctx context.Context, body []byte, table string, key string) err
 		if errors.DBKeyAlreadyExist == err.ErrNo() {
 			return fmt.Errorf("error while trying to create new %v resource: %v", table, err.Error())
 		}
-		l.LogWithFields(ctx).Warn("Skipped saving of duplicate data with key " + key)
+		l.Log.Warn("Skipped saving of duplicate data with key " + key)
 	}
 	return nil
 }
@@ -329,8 +325,8 @@ func GetRange(index string, min, max int, regexFlag bool) ([]string, error) {
 1.systemURI: computer system uri for which system operation is maintained
 2.resetType : reset type which is performed
 */
-func AddSystemResetInfo(ctx context.Context, systemID, resetType string) *errors.Error {
-	l.LogWithFields(ctx).Debugf("incoming AddSystemResetInfo request for SystemID: %s, resetType: %s", systemID, resetType)
+func AddSystemResetInfo(systemID, resetType string) *errors.Error {
+
 	conn, err := GetDBConnectionFunc(common.InMemory)
 	if err != nil {
 		return err
@@ -350,8 +346,7 @@ func AddSystemResetInfo(ctx context.Context, systemID, resetType string) *errors
 /* Inputs:
 1.systemURI: computer system uri for which system operation is maintained
 */
-func GetSystemResetInfo(ctx context.Context, systemURI string) (map[string]string, *errors.Error) {
-	l.LogWithFields(ctx).Debugf("incoming GetSystemResetInfo request for URI: %s", systemURI)
+func GetSystemResetInfo(systemURI string) (map[string]string, *errors.Error) {
 	var resetInfo map[string]string
 
 	conn, err := GetDBConnectionFunc(common.InMemory)
@@ -370,9 +365,8 @@ func GetSystemResetInfo(ctx context.Context, systemURI string) (map[string]strin
 	return resetInfo, nil
 }
 
-// DeleteVolume will delete the volume from InMemory
-func DeleteVolume(ctx context.Context, key string) *errors.Error {
-	l.LogWithFields(ctx).Debugf("incoming DeleteVolume request for key: %s", key)
+//DeleteVolume will delete the volume from InMemory
+func DeleteVolume(key string) *errors.Error {
 	connPool, err := GetDBConnectionFunc(common.InMemory)
 	if err != nil {
 		return errors.PackError(err.ErrNo(), "error while trying to connecting to DB: ", err.Error())

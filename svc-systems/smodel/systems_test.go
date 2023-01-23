@@ -230,7 +230,6 @@ func TestGetPluginData(t *testing.T) {
 
 func TestGetSystemByUUID(t *testing.T) {
 	config.SetUpMockConfig(t)
-	ctx := mockContext()
 	defer func() {
 		err := common.TruncateDB(common.OnDisk)
 		if err != nil {
@@ -244,17 +243,17 @@ func TestGetSystemByUUID(t *testing.T) {
 	body := `{"Id":"1","Status":{"State":"Enabled"}}`
 	table := "ComputerSystem"
 	key := "/redfish/v1/Systems/uuid.1"
-	GenericSave(ctx, []byte(body), table, key)
-	data, _ := GetSystemByUUID(ctx, "/redfish/v1/Systems/uuid.1")
+	GenericSave([]byte(body), table, key)
+	data, _ := GetSystemByUUID("/redfish/v1/Systems/uuid.1")
 	assert.Equal(t, data, body, "should be same")
 
 	JSONUnmarshalFunc = func(data []byte, v interface{}) error {
 		return &errors.Error{}
 	}
-	_, err := GetSystemByUUID(ctx, "/redfish/v1/Systems/uuid.1")
+	_, err := GetSystemByUUID("/redfish/v1/Systems/uuid.1")
 	assert.NotNil(t, err, "There should be an error")
 
-	_, err = GetSystemByUUID(ctx, "/redfish/v1/Systems/uuid")
+	_, err = GetSystemByUUID("/redfish/v1/Systems/uuid")
 	assert.NotNil(t, err, "There should be an error")
 
 	JSONUnmarshalFunc = func(data []byte, v interface{}) error {
@@ -264,7 +263,7 @@ func TestGetSystemByUUID(t *testing.T) {
 		return nil, &errors.Error{}
 
 	}
-	_, err = GetSystemByUUID(ctx, "/redfish/v1/Systems/uuid")
+	_, err = GetSystemByUUID("/redfish/v1/Systems/uuid")
 	assert.NotNil(t, err, "There should be an error")
 
 	GetDBConnectionFunc = func(dbFlag common.DbType) (*persistencemgr.ConnPool, *errors.Error) {
@@ -312,7 +311,6 @@ func TestGetTarget_negative(t *testing.T) {
 
 func TestGenericSave(t *testing.T) {
 	config.SetUpMockConfig(t)
-	ctx := mockContext()
 	defer func() {
 		err := common.TruncateDB(common.InMemory)
 		if err != nil {
@@ -327,17 +325,17 @@ func TestGenericSave(t *testing.T) {
 	body := []byte(`body`)
 	table := "EthernetInterfaces"
 	key := "/redfish/v1/Managers/uuid.1/EthernetInterfaces/1"
-	err := GenericSave(ctx, body, table, key)
+	err := GenericSave(body, table, key)
 	assert.Nil(t, err, "There should be no error")
 
 	GetDBConnectionFunc = func(dbFlag common.DbType) (*persistencemgr.ConnPool, *errors.Error) {
 		return nil, &errors.Error{}
 
 	}
-	err = GenericSave(ctx, body, table, key)
+	err = GenericSave(body, table, key)
 	assert.NotNil(t, err, "There should be an error")
 
-	_, err = GetResource(ctx, table, key)
+	_, err = GetResource(table, key)
 	assert.NotNil(t, err, "There should be an error")
 
 	GetDBConnectionFunc = func(dbFlag common.DbType) (*persistencemgr.ConnPool, *errors.Error) {
@@ -347,20 +345,19 @@ func TestGenericSave(t *testing.T) {
 	JSONUnmarshalFunc = func(data []byte, v interface{}) error {
 		return &errors.Error{}
 	}
-	_, err = GetResource(ctx, table, key)
+	_, err = GetResource(table, key)
 	assert.NotNil(t, err, "There should be an error")
 	JSONUnmarshalFunc = func(data []byte, v interface{}) error {
 		return json.Unmarshal(data, v)
 	}
 
-	data, err := GetResource(ctx, table, key)
+	data, err := GetResource(table, key)
 	assert.Nil(t, err, "There should be no error")
 	assert.Equal(t, data, string(body), "should be same")
 }
 
 func TestGetAllkeysFromTable(t *testing.T) {
 	config.SetUpMockConfig(t)
-	ctx := mockContext()
 	defer func() {
 		err := common.TruncateDB(common.InMemory)
 		if err != nil {
@@ -375,7 +372,7 @@ func TestGetAllkeysFromTable(t *testing.T) {
 	body := []byte(`body`)
 	table := "EthernetInterfaces"
 	key := "/redfish/v1/Managers/uuid.1/EthernetInterfaces/1"
-	err := GenericSave(ctx, body, table, key)
+	err := GenericSave(body, table, key)
 	assert.Nil(t, err, "There should be no error")
 
 	allKeys, err := GetAllKeysFromTable(table)
@@ -384,7 +381,6 @@ func TestGetAllkeysFromTable(t *testing.T) {
 }
 
 func TestGetResourceNegativeTestCases(t *testing.T) {
-	ctx := mockContext()
 	defer func() {
 		err := common.TruncateDB(common.InMemory)
 		if err != nil {
@@ -399,7 +395,7 @@ func TestGetResourceNegativeTestCases(t *testing.T) {
 	table := "EthernetInterfaces"
 	key := "/redfish/v1/Managers/uuid.1/EthernetInterfaces/1"
 
-	_, err := GetResource(ctx, table, key)
+	_, err := GetResource(table, key)
 	assert.NotNil(t, err, "There should be an error")
 
 	// if key not present
@@ -407,7 +403,7 @@ func TestGetResourceNegativeTestCases(t *testing.T) {
 	table = "Ethernet"
 	key = "/redfish/v1/Managers/uuid.1/Ethernets/1"
 
-	_, err = GetResource(ctx, table, key)
+	_, err = GetResource(table, key)
 	assert.NotNil(t, err, "There should be an error")
 
 }
@@ -486,7 +482,6 @@ func TestGetRange(t *testing.T) {
 func TestSystemReset(t *testing.T) {
 	// testing  the Add SystemReset use case
 	common.SetUpMockConfig()
-	ctx := mockContext()
 	defer func() {
 		err := common.TruncateDB(common.InMemory)
 		if err != nil {
@@ -498,21 +493,20 @@ func TestSystemReset(t *testing.T) {
 		}
 	}()
 	systemURI := "/redfish/v1/System/uuid.1"
-	err := AddSystemResetInfo(ctx, systemURI, "ForceRestart")
+	err := AddSystemResetInfo(systemURI, "ForceRestart")
 	assert.Nil(t, err, "err should be nil")
 
 	// testing the get system operation
-	data, err := GetSystemResetInfo(ctx, systemURI)
+	data, err := GetSystemResetInfo(systemURI)
 	assert.Nil(t, err, "err should be nil")
 	assert.Equal(t, "ForceRestart", data["ResetType"])
 
-	_, err = GetSystemResetInfo(ctx, "systemURI")
+	_, err = GetSystemResetInfo("systemURI")
 	assert.NotNil(t, err, "Error Should not be nil")
 
 }
 
 func TestDeleteVolume(t *testing.T) {
-	ctx := mockContext()
 	defer func() {
 		common.TruncateDB(common.InMemory)
 	}()
@@ -535,7 +529,7 @@ func TestDeleteVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := DeleteVolume(ctx, tt.key); !reflect.DeepEqual(got, tt.want) {
+			if got := DeleteVolume(tt.key); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("DeleteVolume() = %v, want %v", got, tt.want)
 			}
 		})
@@ -608,7 +602,6 @@ func TestFindAll(t *testing.T) {
 }
 
 func TestGetAllKeysFromTable(t *testing.T) {
-	ctx := mockContext()
 	defer func() {
 		common.TruncateDB(common.InMemory)
 	}()
@@ -630,12 +623,12 @@ func TestGetAllKeysFromTable(t *testing.T) {
 	_, err = GetRange("Volumes", 0, 100, true)
 	assert.NotNil(t, err, "should be an error ")
 
-	err = AddSystemResetInfo(ctx, "Volumes", "rese")
+	err = AddSystemResetInfo("Volumes", "rese")
 	assert.NotNil(t, err, "should be an error ")
 
-	_, err = GetSystemResetInfo(ctx, "Volumes")
+	_, err = GetSystemResetInfo("Volumes")
 	assert.NotNil(t, err, "should be an error ")
-	err = DeleteVolume(ctx, "Volumes")
+	err = DeleteVolume("Volumes")
 	assert.NotNil(t, err, "should be an error ")
 	GetDBConnectionFunc = func(dbFlag common.DbType) (*persistencemgr.ConnPool, *errors.Error) {
 		return common.GetDBConnection(dbFlag)

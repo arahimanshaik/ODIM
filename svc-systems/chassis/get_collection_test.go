@@ -17,7 +17,6 @@
 package chassis
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -41,8 +40,8 @@ func Test_GetCollectionHandler_WhenMultipleSourcesAreAvailable(t *testing.T) {
 	cspMock := new(collectionSourceProviderMock)
 	cspMock.On("findSources").Return([]source{source1, source2}, nil)
 	sut := GetCollection{cspMock}
-	ctx := mockContext()
-	r := sut.Handle(ctx)
+
+	r := sut.Handle()
 	require.EqualValues(t, http.StatusOK, r.StatusCode)
 	require.IsType(t, sresponse.NewChassisCollection(), r.Body)
 	require.Equal(t, []dmtfmodel.Link{{Oid: "1"}, {Oid: "3"}, {Oid: "2"}, {Oid: "4"}, {Oid: "5"}}, r.Body.(sresponse.Collection).Members)
@@ -53,8 +52,8 @@ func Test_GetCollectionHandler_WhenCollectionSourcesCannotBeDetermined(t *testin
 
 	cspMock.On("findSources").Return([]source{}, &internalError)
 	sut := GetCollection{cspMock}
-	ctx := mockContext()
-	r := sut.Handle(ctx)
+
+	r := sut.Handle()
 	require.NotEqual(t, http.StatusOK, r.StatusCode)
 	require.IsType(t, response.CommonError{}, r.Body)
 }
@@ -65,8 +64,8 @@ func Test_GetCollectionHandler_WhenFirstSourceReturnsError(t *testing.T) {
 	cspMock := new(collectionSourceProviderMock)
 	cspMock.On("findSources").Return([]source{source1}, nil)
 	sut := GetCollection{cspMock}
-	ctx := mockContext()
-	r := sut.Handle(ctx)
+
+	r := sut.Handle()
 	require.NotEqual(t, http.StatusOK, r.StatusCode)
 	require.IsType(t, response.CommonError{}, r.Body)
 }
@@ -80,8 +79,8 @@ func Test_GetCollectionHandler_WhenNonFirstSourceReturnsError(t *testing.T) {
 	cspMock := new(collectionSourceProviderMock)
 	cspMock.On("findSources").Return([]source{source1, source2}, nil)
 	sut := GetCollection{cspMock}
-	ctx := mockContext()
-	r := sut.Handle(ctx)
+
+	r := sut.Handle()
 	require.NotEqual(t, http.StatusOK, r.StatusCode)
 	require.IsType(t, response.CommonError{}, r.Body)
 }
@@ -92,8 +91,8 @@ func Test_collectionSourceProvider_whenURPIsNotRegistered(t *testing.T) {
 			return nil, errors.PackError(errors.DBKeyNotFound, "plugin not found")
 		},
 	}
-	ctx := mockContext()
-	r, e := sut.findSources(ctx)
+
+	r, e := sut.findSources()
 	require.Nil(t, e)
 	require.Len(t, r, 1)
 	require.IsType(t, &managedChassisProvider{}, r[0])
@@ -106,8 +105,8 @@ func Test_collectionSourceProvider_whenURPIsRegistered(t *testing.T) {
 			return cm, nil
 		},
 	}
-	ctx := mockContext()
-	r, e := sut.findSources(ctx)
+
+	r, e := sut.findSources()
 	require.Nil(t, e)
 	require.Len(t, r, 2)
 	require.IsType(t, &managedChassisProvider{}, r[0])
@@ -120,8 +119,8 @@ func Test_collectionSourceProvider_whenURPIsRegisteredAndUnderlyingDBReturnsErro
 			return nil, errors.PackError(errors.UndefinedErrorType, "unexpected error")
 		},
 	}
-	ctx := mockContext()
-	_, e := sut.findSources(ctx)
+
+	_, e := sut.findSources()
 	require.NotNil(t, e)
 }
 
@@ -131,8 +130,8 @@ func Test_managedChassisProvider_WhenUnderlyingDBReturnsError(t *testing.T) {
 			return nil, fmt.Errorf("error")
 		},
 	}
-	ctx := mockContext()
-	_, e := sut.read(ctx)
+
+	_, e := sut.read()
 	require.NotNil(t, e)
 }
 
@@ -142,8 +141,8 @@ func Test_managedChassisProvider_WhenUnderlyingDBReturnsNoKeys(t *testing.T) {
 			return []string{}, nil
 		},
 	}
-	ctx := mockContext()
-	r, e := sut.read(ctx)
+
+	r, e := sut.read()
 	require.Nil(t, e)
 	require.Len(t, r, 0)
 }
@@ -156,8 +155,8 @@ func Test_managedChassisProvider_WhenUnderlyingDBReturnsSomeKeys(t *testing.T) {
 			}, nil
 		},
 	}
-	ctx := mockContext()
-	r, e := sut.read(ctx)
+
+	r, e := sut.read()
 	require.Nil(t, e)
 	require.Len(t, r, 3)
 	require.Equal(t, []dmtfmodel.Link{
@@ -169,12 +168,12 @@ type collectionSourceProviderMock struct {
 	mock.Mock
 }
 
-func (c *collectionSourceProviderMock) findSources(ctx context.Context) ([]source, *response.RPC) {
+func (c *collectionSourceProviderMock) findSources() ([]source, *response.RPC) {
 	args := c.Mock.Called()
 	return args.Get(0).([]source), getErrorOrNil(args.Get(1))
 }
 
-func (c *collectionSourceProviderMock) findFabricChassis(ctx context.Context, col *sresponse.Collection) {
+func (c *collectionSourceProviderMock) findFabricChassis(col *sresponse.Collection) {
 	link := dmtfmodel.Link{
 		Oid: "5",
 	}
@@ -192,7 +191,7 @@ type sourceMock struct {
 	mock.Mock
 }
 
-func (s *sourceMock) read(ctx context.Context) ([]dmtfmodel.Link, *response.RPC) {
+func (s *sourceMock) read() ([]dmtfmodel.Link, *response.RPC) {
 	args := s.Mock.Called()
 	return args.Get(0).([]dmtfmodel.Link), getErrorOrNil(args.Get(1))
 }

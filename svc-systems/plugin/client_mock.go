@@ -17,7 +17,6 @@
 package plugin
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
@@ -31,7 +30,7 @@ type ClientMock struct {
 }
 
 // Get mocks response of GET APis
-func (c *ClientMock) Get(ctx context.Context, uri string, opts ...CallOption) response.RPC {
+func (c *ClientMock) Get(uri string, opts ...CallOption) response.RPC {
 	args := c.Called(uri, opts)
 
 	var r response.RPC
@@ -42,7 +41,7 @@ func (c *ClientMock) Get(ctx context.Context, uri string, opts ...CallOption) re
 }
 
 // Post mocks response of POST APIs
-func (c *ClientMock) Post(ctx context.Context, uri string, body *json.RawMessage) response.RPC {
+func (c *ClientMock) Post(uri string, body *json.RawMessage) response.RPC {
 	// TODO: Implement this
 	return response.RPC{
 		StatusCode: http.StatusNotImplemented,
@@ -50,7 +49,7 @@ func (c *ClientMock) Post(ctx context.Context, uri string, body *json.RawMessage
 }
 
 // Delete mocks response of Delete APIs
-func (c *ClientMock) Delete(ctx context.Context, uri string) response.RPC {
+func (c *ClientMock) Delete(uri string) response.RPC {
 	// TODO: Implement this
 	return response.RPC{
 		StatusCode: http.StatusNotImplemented,
@@ -58,7 +57,7 @@ func (c *ClientMock) Delete(ctx context.Context, uri string) response.RPC {
 }
 
 // Patch mocks response of Patch APIs
-func (c *ClientMock) Patch(ctx context.Context, uri string, body *json.RawMessage) response.RPC {
+func (c *ClientMock) Patch(uri string, body *json.RawMessage) response.RPC {
 	if uri == "/redfish/v1/Managers/3ccb5c71-0e00-4d14-93bb-8d125c030f27" {
 		return response.RPC{
 			StatusCode: http.StatusOK,

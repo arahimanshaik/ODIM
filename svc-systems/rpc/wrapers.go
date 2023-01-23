@@ -17,7 +17,6 @@
 package rpc
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/ODIM-Project/ODIM/lib-utilities/common"
@@ -27,7 +26,7 @@ import (
 
 type authenticator func(sessionToken string, privileges, oemPrivileges []string) (response.RPC, error)
 
-func auth(ctx context.Context, authenticate authenticator, sessionToken string,
+func auth(authenticate authenticator, sessionToken string,
 	privilages []string, callback func() response.RPC) response.RPC {
 	if sessionToken == "" {
 		return common.GeneralError(http.StatusUnauthorized, response.NoValidSession, "X-Auth-Token header is missing", nil, nil)
@@ -36,7 +35,7 @@ func auth(ctx context.Context, authenticate authenticator, sessionToken string,
 	resp, err := authenticate(sessionToken, privilages, []string{})
 	if resp.StatusCode != http.StatusOK {
 		if err != nil {
-			l.LogWithFields(ctx).Errorf("Error while authorizing the session token : %s", err.Error())
+			l.Log.Errorf("Error while authorizing the session token : %s", err.Error())
 		}
 		return resp
 	}

@@ -15,7 +15,6 @@
 package chassis
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"reflect"
@@ -33,8 +32,7 @@ func Test_fabricFactory_getFabricChassisResource(t *testing.T) {
 	config.SetUpMockConfig(t)
 	f := getFabricFactoryMock(nil)
 	ferr := getFabricFactoryMock(nil)
-	ctx := mockContext()
-	ferr.getFabricManagers = func(context.Context) ([]smodel.Plugin, error) {
+	ferr.getFabricManagers = func() ([]smodel.Plugin, error) {
 		return nil, errors.New("")
 	}
 	var r response.RPC
@@ -81,7 +79,7 @@ func Test_fabricFactory_getFabricChassisResource(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.f.getFabricChassisResource(ctx, tt.args.rID); !reflect.DeepEqual(got, tt.want) {
+			if got := tt.f.getFabricChassisResource(tt.args.rID); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("fabricFactory.getFabricChassisResource() = %v, want %v", got, tt.want)
 			}
 		})
@@ -92,10 +90,9 @@ func Test_collectChassisResource(t *testing.T) {
 	Token.Tokens = make(map[string]string)
 	config.SetUpMockConfig(t)
 	f := getFabricFactoryMock(nil)
-	ctx := mockContext()
-	ContactPluginFunc = func(ctx context.Context, req *pluginContactRequest) ([]byte, string, int, string, error) {
+	ContactPluginFunc = func(req *pluginContactRequest) ([]byte, string, int, string, error) {
 		return nil, "", 401, "", errors.New("")
 	}
-	collectChassisResource(ctx, f, &pluginContactRequest{URL: "test"})
+	collectChassisResource(f, &pluginContactRequest{URL: "test"})
 
 }
